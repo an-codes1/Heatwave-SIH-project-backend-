@@ -123,6 +123,20 @@ class WeatherObservation(Base):
         Float,
         nullable=True,
     )
+    direct_radiation_wm2: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    diffuse_radiation_wm2: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    direct_normal_irradiance_wm2: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
 
     atmospheric_pressure_hpa: Mapped[float | None] = mapped_column(
         Float,
@@ -192,6 +206,20 @@ class WeatherForecast(Base):
     )
 
     solar_radiation_wm2: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    direct_radiation_wm2: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    diffuse_radiation_wm2: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    direct_normal_irradiance_wm2: Mapped[float | None] = mapped_column(
         Float,
         nullable=True,
     )
