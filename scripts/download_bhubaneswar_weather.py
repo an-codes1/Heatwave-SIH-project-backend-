@@ -77,6 +77,9 @@ def download_weather(
                 "relative_humidity_2m",
                 "wind_speed_10m",
                 "shortwave_radiation",
+                "direct_radiation",
+                "diffuse_radiation",
+                "direct_normal_irradiance",
                 "surface_pressure",
             ]
         ),

@@ -30,6 +30,9 @@ def valid_row(
     humidity,
     wind,
     radiation,
+    direct_radiation,
+    diffuse_radiation,
+    dni,
     pressure,
 ) -> bool:
     """Check whether all required weather values are usable."""
@@ -47,6 +50,15 @@ def valid_row(
 
             radiation is not None
             and 0 <= radiation <= 1500,
+
+            direct_radiation is not None
+            and 0 <= direct_radiation <= 1500,
+
+            diffuse_radiation is not None
+            and 0 <= diffuse_radiation <= 1500,
+
+            dni is not None
+            and 0 <= dni <= 1500,
 
             pressure is not None
             and 750 <= pressure <= 1100,
@@ -114,6 +126,9 @@ async def main() -> None:
     humidities = hourly["relative_humidity_2m"]
     winds = hourly["wind_speed_10m"]
     radiation = hourly["shortwave_radiation"]
+    direct_radiation = hourly["direct_radiation"]
+    diffuse_radiation = hourly["diffuse_radiation"]
+    dni = hourly["direct_normal_irradiance"]
     pressures = hourly["surface_pressure"]
 
     inserted = 0
@@ -153,6 +168,9 @@ async def main() -> None:
             humidity = humidities[index]
             wind = winds[index]
             solar = radiation[index]
+            direct = direct_radiation[index]
+            diffuse = diffuse_radiation[index]
+            dni_value = dni[index]
             pressure = pressures[index]
 
             if not valid_row(
@@ -160,6 +178,9 @@ async def main() -> None:
                 humidity,
                 wind,
                 solar,
+                direct,
+                diffuse,
+                dni_value,
                 pressure,
             ):
                 rejected += 1
@@ -176,6 +197,9 @@ async def main() -> None:
                 relative_humidity_pct=humidity,
                 wind_speed_ms=wind,
                 solar_radiation_wm2=solar,
+                direct_radiation_wm2=direct,
+                diffuse_radiation_wm2=diffuse,
+                direct_normal_irradiance_wm2=dni_value,
                 atmospheric_pressure_hpa=pressure,
                 source=SOURCE_NAME,
             )

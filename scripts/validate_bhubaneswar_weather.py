@@ -27,6 +27,18 @@ def valid_pressure(value):
     return value is not None and 750 <= value <= 1100
 
 
+VARIABLES = [
+    ("temperature_2m", "Temperature", valid_temperature),
+    ("relative_humidity_2m", "Humidity", valid_humidity),
+    ("wind_speed_10m", "Wind", valid_wind),
+    ("shortwave_radiation", "Shortwave radiation", valid_radiation),
+    ("direct_radiation", "Direct radiation", valid_radiation),
+    ("diffuse_radiation", "Diffuse radiation", valid_radiation),
+    ("direct_normal_irradiance", "DNI", valid_radiation),
+    ("surface_pressure", "Pressure", valid_pressure),
+]
+
+
 def main() -> None:
     data = json.loads(
         INPUT_FILE.read_text(
@@ -37,25 +49,28 @@ def main() -> None:
     hourly = data["hourly"]
 
     times = hourly["time"]
-    temperatures = hourly["temperature_2m"]
-    humidities = hourly["relative_humidity_2m"]
-    winds = hourly["wind_speed_10m"]
-    radiation = hourly["shortwave_radiation"]
-    pressures = hourly["surface_pressure"]
 
-    lengths = {
-        len(times),
-        len(temperatures),
-        len(humidities),
-        len(winds),
-        len(radiation),
-        len(pressures),
-    }
+    missing_keys = [
+        key for key, _, _ in VARIABLES
+        if key not in hourly
+    ]
+
+    if missing_keys:
+        raise RuntimeError(
+            "The weather file is missing variables: "
+            + ", ".join(missing_keys)
+        )
+
+    arrays = [hourly[key] for key, _, _ in VARIABLES]
+
+    lengths = {len(times), *(len(array) for array in arrays)}
 
     if len(lengths) != 1:
         raise RuntimeError(
             "Weather arrays have different lengths."
         )
+
+    missing_counts = {key: 0 for key, _, _ in VARIABLES}
 
     valid = 0
     invalid = 0
@@ -64,25 +79,20 @@ def main() -> None:
 
     for index in range(len(times)):
 
-        checks = [
-            valid_temperature(
-                temperatures[index]
-            ),
-            valid_humidity(
-                humidities[index]
-            ),
-            valid_wind(
-                winds[index]
-            ),
-            valid_radiation(
-                radiation[index]
-            ),
-            valid_pressure(
-                pressures[index]
-            ),
-        ]
+        row_valid = True
 
-        if all(checks):
+        for key, _, check in VARIABLES:
+            value = hourly[key][index]
+
+            if value is None:
+                row_valid = False
+                missing_counts[key] += 1
+                continue
+
+            if not check(value):
+                row_valid = False
+
+        if row_valid:
             valid += 1
         else:
             invalid += 1
@@ -97,30 +107,24 @@ def main() -> None:
     print(f"Invalid records: {invalid}")
 
     print()
-    print(
-        f"Temperature range: "
-        f"{min(temperatures)} to {max(temperatures)} °C"
-    )
+    print("Missing values:")
+    for key, label, _ in VARIABLES:
+        print(f"{label} missing: {missing_counts[key]}")
 
-    print(
-        f"Humidity range: "
-        f"{min(humidities)} to {max(humidities)} %"
-    )
+    print()
+    print("Value ranges (non-null values only):")
 
-    print(
-        f"Wind range: "
-        f"{min(winds)} to {max(winds)} m/s"
-    )
+    for key, label, _ in VARIABLES:
+        values = [
+            value for value in hourly[key]
+            if value is not None
+        ]
 
-    print(
-        f"Radiation range: "
-        f"{min(radiation)} to {max(radiation)} W/m²"
-    )
+        if not values:
+            print(f"{label}: no values available")
+            continue
 
-    print(
-        f"Pressure range: "
-        f"{min(pressures)} to {max(pressures)} hPa"
-    )
+        print(f"{label}: {min(values)} to {max(values)}")
 
     if invalid_rows:
         print()
