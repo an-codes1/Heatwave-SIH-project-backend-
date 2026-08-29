@@ -52,7 +52,7 @@ def calculate_utci(
             "Relative humidity must be between 0 and 100 percent.",
         )
 
-    if not 0.5 < wind_speed_ms < 17:
+    if not 0.5 <= wind_speed_ms <= 17:
         return UTCIResult(
             None,
             None,

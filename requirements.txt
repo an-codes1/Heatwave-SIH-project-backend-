@@ -39,8 +39,10 @@ pydantic-extra-types==2.11.1
 pydantic-settings==2.15.0
 pydantic_core==2.46.4
 Pygments==2.21.0
+pvlib==0.15.2
 pyogrio==0.13.0
 pyproj==3.7.2
+pytest==9.1.1
 pythermalcomfort==4.4.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.3

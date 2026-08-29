@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -23,6 +24,15 @@ class ThermalIndex(Base):
     """
 
     __tablename__ = "thermal_indices"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "station_id",
+            "valid_for",
+            "calculation_type",
+            name="uq_thermal_index_station_time_type",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(
         BigInteger,
@@ -74,7 +84,7 @@ class ThermalIndex(Base):
     )
 
     calculation_type: Mapped[str] = mapped_column(
-        String(20),
+        String(40),
         nullable=False,
     )
 
