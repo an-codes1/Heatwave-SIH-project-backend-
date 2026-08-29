@@ -17,6 +17,11 @@ class Settings(BaseSettings):
 
     notification_dry_run: bool = True
 
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+    twilio_from_number: str | None = None
+    alert_recipient_phone: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

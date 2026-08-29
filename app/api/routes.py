@@ -1,8 +1,11 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.session import get_db
 from app.schemas.api import (
+    AlertGenerationOut,
     AlertOut,
     ForecastOut,
     RiskPredictionOut,
@@ -13,6 +16,11 @@ from app.schemas.api import (
     ZoneOut,
 )
 from app.services import queries
+from app.services.alert_engine import generate_alerts
+from app.services.notifications import get_notification_provider
+from app.models.alert import Alert
+from app.services.notifications.base import DryRunProvider
+from app.core.config import settings
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1")
@@ -281,22 +289,116 @@ async def get_alerts(
 ):
     try:
         alerts = await queries.list_alerts(session)
+        zones = await queries.list_zones(session)
     except SQLAlchemyError:
         db_error_handler()
 
-    zone_by_id = {zone.id: zone.zone_code for zone in await queries.list_zones(session)}
+    zone_by_id = {zone.id: zone.zone_code for zone in zones}
 
-    return [
-        {
-            "id": alert.id,
-            "zone_code": zone_by_id.get(alert.zone_id),
-            "alert_level": alert.alert_level,
-            "alert_message": alert.alert_message,
-            "recommended_action": alert.recommended_action,
-            "status": alert.status,
-            "channel": alert.channel,
-            "created_at": alert.created_at,
-            "sent_at": alert.sent_at,
-        }
-        for alert in alerts
-    ]
+    return [_alert_out(alert, zone_by_id) for alert in alerts]
+
+
+@router.post(
+    "/alerts/generate",
+    response_model=AlertGenerationOut,
+)
+async def generate_zone_alerts(
+    session: AsyncSession = Depends(get_db),
+):
+    try:
+        created, counts = await generate_alerts(session)
+        zones = await queries.list_zones(session)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        )
+    except SQLAlchemyError:
+        db_error_handler()
+
+    zone_by_id = {zone.id: zone.zone_code for zone in zones}
+
+    return {
+        "generated": counts["generated"],
+        "deduplicated": counts["deduplicated"],
+        "below_threshold": counts["below_threshold"],
+        "alerts": [
+            _alert_out(alert, zone_by_id) for alert in created
+        ],
+    }
+
+
+@router.post(
+    "/alerts/{alert_id}/send",
+    response_model=AlertOut,
+)
+async def send_alert(
+    alert_id: int,
+    session: AsyncSession = Depends(get_db),
+):
+    alert = await session.get(Alert, alert_id)
+
+    if alert is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Alert {alert_id} not found.",
+        )
+
+    try:
+        provider = get_notification_provider()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        )
+
+    recipient = settings.alert_recipient_phone
+
+    if not recipient:
+        if isinstance(provider, DryRunProvider):
+            recipient = "dry-run-recipient"
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ALERT_RECIPIENT_PHONE is not configured.",
+            )
+
+    message = f"[{alert.alert_level}] {alert.alert_message}"
+
+    try:
+        provider.send(recipient, message)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Notification delivery failed: {exc}",
+        )
+
+    alert.status = "sent"
+    alert.sent_at = datetime.now(timezone.utc)
+
+    try:
+        await session.commit()
+        zones = await queries.list_zones(session)
+    except SQLAlchemyError:
+        db_error_handler()
+
+    zone_by_id = {zone.id: zone.zone_code for zone in zones}
+
+    return _alert_out(alert, zone_by_id)
+
+
+def _alert_out(
+    alert: Alert,
+    zone_by_id: dict[int, str | None],
+) -> dict:
+    return {
+        "id": alert.id,
+        "zone_code": zone_by_id.get(alert.zone_id),
+        "alert_level": alert.alert_level,
+        "alert_message": alert.alert_message,
+        "recommended_action": alert.recommended_action,
+        "status": alert.status,
+        "channel": alert.channel,
+        "created_at": alert.created_at,
+        "sent_at": alert.sent_at,
+    }

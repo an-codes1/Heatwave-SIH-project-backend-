@@ -82,6 +82,13 @@ class AlertOut(BaseModel):
     sent_at: datetime | None
 
 
+class AlertGenerationOut(BaseModel):
+    generated: int
+    deduplicated: int
+    below_threshold: int
+    alerts: list[AlertOut]
+
+
 class RiskZoneFeature(BaseModel):
     type: str = "Feature"
     geometry: dict = Field(..., description="GeoJSON geometry")
