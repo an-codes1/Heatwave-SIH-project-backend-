@@ -11,7 +11,7 @@ a FastAPI service.
 
 ## Project Status
 
-MVP complete (Milestones M1–M11).
+MVP complete (Milestones M1–M11, hardening polish pass P1–P20).
 
 - Human thermal stress is modelled with **UTCI** (Universal Thermal
   Climate Index), using the operational **pythermalcomfort** implementation.
@@ -26,6 +26,43 @@ MVP complete (Milestones M1–M11).
 
 ## Architecture
 
+```mermaid
+flowchart LR
+    subgraph Ingest["Data Ingestion"]
+        ERA5[ERA5 reanalysis<br/>2020-2025 hourly]
+        OMP[Open-Meteo<br/>5-day forecast]
+    end
+
+    subgraph Core["Thermal Core"]
+        SP[pvlib solar geometry]
+        MRT[MRT model<br/>shade + sun-exposed]
+        UTCI[pythalcomfort UTCI]
+        SEV[severity score 0-100]
+    end
+
+    subgraph Risk["Risk Layer"]
+        VULN[demographic vulnerability]
+        RISKPROXY[ward heat-health risk<br/>0.7 thermal + 0.3 vulnerability]
+        RULES[alert rules]
+    end
+
+    ERA5 --> SOBS[(weather_observations)]
+    OMP --> SFOR[(weather_forecasts)]
+    SOBS --> SP
+    SFOR --> SP
+    SP --> MRT --> UTCI --> TIDX[(thermal_indices)]
+    TIDX --> SEV
+    GEO[ward GIS + census] --> VULN --> RISKPROXY
+    SEV --> RISKPROXY --> RP[(risk_predictions)]
+    RP --> RULES --> AL[(alerts)]
+    AL -- dry-run default --> SMS[Twilio SMS/WhatsApp]
+    AL --> API[FastAPI /api/v1]
+    RP --> API
+    TIDX --> API
+```
+
+Scripts, thermal math, risk proxy, alerts, and the FastAPI surface:
+
 ```
 scripts/          one-off data pipelines (ingestion + calculation)
 thermal/          UTCI, MRT, solar position, risk classification
@@ -34,10 +71,11 @@ app/
   api/routes.py   FastAPI routes (/api/v1)
   services/       query helpers, alert engine, notification providers
   models/         SQLAlchemy models (PostGIS)
-  db/             async engine + session
+  db/             async engine + session (env-driven pooling)
   core/config.py  pydantic-settings configuration
+  core/logging.py structured JSON logging
 alembic/          schema migrations
-tests/            pytest suite (30 tests)
+tests/            pytest suite (48 tests)
 ```
 
 Data flow:
@@ -100,10 +138,34 @@ All pipelines are idempotent and may be re-run safely.
 ### 4. API
 
 ```powershell
-.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+Copy-Item .env.example .env   # set DATABASE_URL and pool/twilio settings (first)
+.venv\Scripts\python.exe -m scripts.run_dev
+```
+
+or run uvicorn directly:
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
 
 Interactive docs at http://127.0.0.1:8000/docs
+
+### Environment variables (see `.env.example`)
+
+| Variable                  | Default | Purpose                                        |
+| ------------------------- | ------- | ---------------------------------------------- |
+| `DATABASE_URL`            | —       | Postgres DSN, e.g. `postgresql+asyncpg://...`  |
+| `DB_POOL_SIZE`            | `5`     | Connection pool size (`0` = NullPool, one conn per session; used by tests) |
+| `DB_MAX_OVERFLOW`         | `10`    | Overflow connections above pool size           |
+| `DB_POOL_TIMEOUT`         | `30.0`  | Seconds to wait for a pooled connection        |
+| `DB_POOL_RECYCLE`         | `1800`  | Recycle pooled connections (seconds)           |
+| `CORS_ORIGINS`            | see example | Comma-separated allowed browser origins    |
+| `NOTIFICATION_DRY_RUN`    | `true`  | Log notifications instead of sending           |
+| `TWILIO_SMS_FROM`         | —       | Twilio SMS sender number                       |
+| `TWILIO_WHATSAPP_FROM`    | —       | Twilio WhatsApp sender (matches `twilio_sms_from`) |
+| `TWILIO_ACCOUNT_SID`      | —       | Twilio account SID                             |
+| `TWILIO_AUTH_TOKEN`       | —       | Twilio auth token (never commit)               |
+| `ALERT_RECIPIENT_PHONE`   | —       | Recipient for generated alerts                 |
 
 ## API Routes
 
@@ -121,6 +183,8 @@ Interactive docs at http://127.0.0.1:8000/docs
 | GET    | `/api/v1/forecast`              | Latest 6-day weather forecast            |
 | GET    | `/api/v1/vulnerability`         | Ward vulnerability scores                |
 | GET    | `/api/v1/risk-zones`            | GeoJSON FeatureCollection (one per ward, latest forecast day) |
+|        | `?level=`                      | Filter by risk level: HIGH, VERY_HIGH (case-insensitive) |
+|        | `?forecast_day=`               | Local-day filter, ISO date (Asia/Kolkata)  |
 | GET    | `/api/v1/alerts`                | Generated alerts                         |
 | POST   | `/api/v1/alerts/generate`       | Create alerts from latest forecast (idempotent) |
 | POST   | `/api/v1/alerts/{id}/send`      | Deliver an alert (dry-run by default)    |
@@ -148,8 +212,18 @@ Twilio credentials via environment variables (see `.env.example`).
 .venv\Scripts\python.exe -m pytest -v
 ```
 
-30 tests cover UTCI/MRT physics, severity classification, the risk proxy,
-vulnerability scoring, API behaviour, and alert generation/delivery.
+48 tests cover UTCI/MRT physics, severity classification, the risk proxy,
+vulnerability scoring, API behaviour (pagination, GeoJSON, CORS, error
+handling, secret hygiene), alert generation/delivery, and scientific-sanity
+regressions (radiation is never used directly as MRT, shade<sun-exposed
+during the day, zero solar gain at night, UTCI reference ≈ 24.6 °C).
+
+## Logging
+
+Structured JSON lines to stdout (`app/core/logging.py`). Startup/shutdown,
+DB health, query failures, and alert generation/send summaries are logged
+with `extra_fields`; API errors return a generic message and never leak
+stack traces or credentials.
 
 ## Key Repository Facts
 

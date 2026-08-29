@@ -6,8 +6,10 @@ End-to-end walkthrough against a running local instance. PowerShell uses
 ## 0. Start the API
 
 ```powershell
-.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+.venv\Scripts\python.exe -m scripts.run_dev
 ```
+
+(equivalent: `.venv\Scripts\python.exe -m uvicorn app.main:app --reload`)
 
 Interactive Swagger UI: http://127.0.0.1:8000/docs
 
@@ -19,8 +21,8 @@ Invoke-RestMethod http://127.0.0.1:8000/health/db
 ```
 
 ```json
-{"status": "ok"}
-{"status": "ok", "database": "ok", "test": 1}
+{"status": "healthy"}
+{"status": "healthy", "database": "ok", "test": 1, "latency_ms": 2.3}
 ```
 
 ## 2. Ward catalogue
@@ -148,6 +150,7 @@ Sample alert:
   "recommended_action": "Limit non-essential outdoor activity, use shaded cooling points, and prioritize vulnerable groups.",
   "status": "sent",
   "channel": "sms",
+  "dry_run": true,
   "created_at": "...",
   "sent_at": "..."
 }
@@ -176,10 +179,10 @@ To deliver real SMS, set the Twilio variables in `.env` and
 ## 10. Tests
 
 ```powershell
-.venv\Scripts\python.exe -m pytest -v      # 30 passed
+.venv\Scripts\python.exe -m pytest -v      # 48 passed
 .venv\Scripts\python.exe -m scripts.test_db
 .venv\Scripts\python.exe -m scripts.test_utci
-.venv\Scripts\alembic.exe current          # 1f3a8c2e9b00 (head)
+.venv\Scripts\alembic.exe current          # 9c5f7e2a1b3d (head)
 ```
 
 ## Warranty / Limitations

@@ -93,3 +93,27 @@ def test_solar_positions_returns_elevation_and_azimuth():
     assert len(azimuths) == 2
     assert elevations[0] > 0
     assert elevations[1] < 0
+
+
+def test_radiation_never_used_directly_as_mrt():
+    air = 35.0
+    radiation = 800.0
+
+    shade = reference_shade_mrt(air)
+    exposed = sun_exposed_mrt(air, radiation, 60.0)
+
+    assert shade.mean_radiant_temperature_c == air
+    assert exposed.mean_radiant_temperature_c != radiation
+    assert exposed.mean_radiant_temperature_c < radiation * 0.5
+    assert exposed.delta_mrt_c == pytest.approx(
+        solar_delta_mrt(radiation, 60.0), abs=1e-6
+    )
+
+
+def test_sun_exposed_mrt_not_below_shade_mrt_during_day():
+    exposed = sun_exposed_mrt(35.0, 800.0, 60.0)
+    shade = reference_shade_mrt(35.0)
+
+    assert exposed.mean_radiant_temperature_c >= (
+        shade.mean_radiant_temperature_c
+    )

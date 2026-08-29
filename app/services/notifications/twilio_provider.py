@@ -17,18 +17,18 @@ class TwilioSmsProvider(NotificationProvider):
         self,
         account_sid: str | None,
         auth_token: str | None,
-        from_number: str | None,
+        sms_from: str | None,
     ) -> None:
-        if not account_sid or not auth_token or not from_number:
+        if not account_sid or not auth_token or not sms_from:
             raise ValueError(
                 "Twilio SMS credentials are not configured "
                 "(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, "
-                "TWILIO_FROM_NUMBER)."
+                "TWILIO_SMS_FROM)."
             )
 
         self.account_sid = account_sid
         self.auth_token = auth_token
-        self.from_number = from_number
+        self.sms_from = sms_from
 
     def send(self, recipient: str, body: str) -> str:
         url = (
@@ -41,7 +41,7 @@ class TwilioSmsProvider(NotificationProvider):
             auth=(self.account_sid, self.auth_token),
             data={
                 "To": recipient,
-                "From": self.from_number,
+                "From": self.sms_from,
                 "Body": body,
             },
             timeout=20.0,

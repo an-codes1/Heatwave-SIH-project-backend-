@@ -103,6 +103,7 @@ async def thermal_history(
     session: AsyncSession,
     calculation_type: str | None,
     limit: int,
+    offset: int,
 ) -> list[ThermalIndex]:
     statement = select(ThermalIndex)
 
@@ -114,7 +115,9 @@ async def thermal_history(
     result = await session.execute(
         statement.order_by(
             ThermalIndex.valid_for.desc()
-        ).limit(limit)
+        )
+        .limit(limit)
+        .offset(offset)
     )
     return list(result.scalars().all())
 
@@ -182,11 +185,25 @@ async def list_alerts(session: AsyncSession) -> list[Alert]:
 async def risk_zones_geojson(
     session: AsyncSession,
     risk_level: str | None,
+    forecast_day: str | None = None,
 ) -> dict:
-    """Build a GeoJSON FeatureCollection of ward risk zones."""
+    """Build a GeoJSON FeatureCollection of ward risk zones.
+
+    One feature per ward for the latest forecast generation. When
+    ``forecast_day`` (ISO date, Asia/Kolkata) is provided the features
+    reflect that local day instead of the latest forecast day.
+    """
+
+    day_filter = ""
+
+    if forecast_day:
+        day_filter = (
+            "\n              AND (rp.prediction_for AT TIME ZONE "
+            "'Asia/Kolkata')::date::text = :forecast_day"
+        )
 
     statement = text(
-        """
+        f"""
         WITH latest_generation AS (
             SELECT MAX(prediction_generated_at) AS gen
             FROM risk_predictions
@@ -199,6 +216,7 @@ async def risk_zones_geojson(
               AND rp.prediction_generated_at = (
                   SELECT gen FROM latest_generation
               )
+              {day_filter}
             GROUP BY rp.zone_id
         )
         SELECT
@@ -227,12 +245,12 @@ async def risk_zones_geojson(
         """
     )
 
-    rows = (
-        await session.execute(
-            statement,
-            {"model_version": FORECAST_MODEL_VERSION},
-        )
-    ).all()
+    params: dict = {"model_version": FORECAST_MODEL_VERSION}
+
+    if forecast_day:
+        params["forecast_day"] = forecast_day
+
+    rows = (await session.execute(statement, params)).all()
 
     features = []
 

@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 
+from app.core.logging import get_logger, log_event
 from app.models.alert import Alert
 from app.models.geographic_zone import GeographicZone
 from app.models.risk import RiskPrediction
@@ -19,6 +20,8 @@ from risk.heat_health_risk import RiskLevel
 FORECAST_MODEL_VERSION = "v0.1-forecast"
 
 INDIA_TZ = ZoneInfo("Asia/Kolkata")
+
+logger = get_logger(__name__)
 
 
 def _level_rank(level: str | None) -> int:
@@ -153,5 +156,12 @@ async def generate_alerts(session) -> tuple[list[Alert], dict[str, int]]:
     await session.commit()
 
     counts["generated"] = len(created)
+
+    log_event(
+        logger,
+        "INFO",
+        "alert generation summary",
+        **counts,
+    )
 
     return created, counts

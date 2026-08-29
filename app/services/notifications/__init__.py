@@ -1,7 +1,7 @@
 """Notification provider factory.
 
-Not production-ready default: dry-run is enabled unless explicitly
-turned off AND Twilio credentials are present.
+Dry-run is the default: nothing is ever transmitted unless
+NOTIFICATION_DRY_RUN=false AND the relevant Twilio credentials are set.
 """
 
 from __future__ import annotations
@@ -23,5 +23,5 @@ def get_notification_provider() -> NotificationProvider:
     return TwilioSmsProvider(
         settings.twilio_account_sid,
         settings.twilio_auth_token,
-        settings.twilio_from_number,
+        settings.twilio_sms_from,
     )
