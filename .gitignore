@@ -16,3 +16,7 @@ Thumbs.db
 .DS_Store
 data/raw/
 data/processed/
+# Local AI/security planning files
+CHATMEMORY.md
+TODO.md
+SECURITY.md
