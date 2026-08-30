@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     twilio_whatsapp_from: str | None = None
     alert_recipient_phone: str | None = None
 
+    admin_api_key: str | None = None
+
     db_pool_size: int = 5
     db_max_overflow: int = 10
     db_pool_timeout: float = 30.0

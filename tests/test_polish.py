@@ -177,7 +177,11 @@ def test_cors_origins_configured_not_wildcard():
 
 
 def test_alert_dry_run_fields():
-    generation = client.post("/api/v1/alerts/generate").json()
+    headers = {"X-Admin-Key": "test-admin-key"}
+    generation = client.post(
+        "/api/v1/alerts/generate",
+        headers=headers,
+    ).json()
     assert "dry_run_default" in generation
 
     alerts = client.get("/api/v1/alerts").json()
@@ -186,7 +190,10 @@ def test_alert_dry_run_fields():
 
     pending = [a for a in alerts if a["status"] == "pending"]
     if pending:
-        sent = client.post(f"/api/v1/alerts/{pending[0]['id']}/send").json()
+        sent = client.post(
+            f"/api/v1/alerts/{pending[0]['id']}/send",
+            headers=headers,
+        ).json()
         assert sent["dry_run"] is True
         assert sent["status"] == "sent"
 

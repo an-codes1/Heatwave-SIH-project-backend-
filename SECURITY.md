@@ -46,6 +46,18 @@ Verified by inspection of the current source:
   obviously-fake password marker and empty `TWILIO_*` values).
   `app/core/config.py` reads secrets as optional settings
   fields; nothing is hardcoded.
+- **Admin API key for state-changing endpoints.** `POST
+  /api/v1/alerts/generate` and `POST /api/v1/alerts/{id}/send` require
+  the `X-Admin-Key` header (`ADMIN_API_KEY` from the environment, via
+  the reusable `require_admin` dependency in `app/core/security.py`).
+  Missing key or unconfigured key → 401; wrong key → 403;
+  comparison is constant-time (`secrets.compare_digest`); the key is
+  never logged or echoed. Read-only GET endpoints stay public.
+- **Security headers on every response.** `X-Content-Type-Options:
+  nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
+  and a minimal `Permissions-Policy` are added by a lightweight
+  middleware (`app/core/security.py`); the Swagger `/docs` pages are
+  not affected (no restrictive CSP).
 - **Generic 500 responses.** `app/main.py` registers a catch-all
   exception handler that returns `{"detail": "Internal server error."}`
   — no traceback, no internals.
@@ -66,7 +78,10 @@ Verified by inspection of the current source:
 - **Dry-run notifications.** `NOTIFICATION_DRY_RUN=true` is the
   default and `get_notification_provider()` returns a `DryRunProvider`
   that only logs. The Twilio provider refuses to construct unless all
-  three credentials are present.
+  three credentials are present. Real sending additionally requires an
+  authenticated admin (valid `X-Admin-Key`).
+- **Masked notification recipients.** Dry-run/provider log output masks
+  recipient identifiers instead of printing them in full.
 - **No patient-level data.** `health_outcomes` is an empty,
   aggregation-only table; mortality/hospitalization risk fields are
   NULL by design; tests assert the API never fabricates them.
@@ -115,18 +130,23 @@ Current behavior:
   cannot be built, 502 on delivery failure — all with generic messages.
 - DB/API errors never leak stack traces or parameter values.
 - The raw GeoJSON query is invoked **only** with bound parameters.
+- State-changing admin actions require a valid admin key via the
+  reusable `require_admin` dependency (`X-Admin-Key` header):
+  401 when the header or `ADMIN_API_KEY` is missing, 403 for a wrong
+  key. Constant-time comparison; the key is never logged or echoed.
 
-Endpoints that **must** gain authentication/authorization before any
-public deployment (none currently have any since the API has no auth):
+Admin-protected endpoints:
 
 - `POST /api/v1/alerts/generate` — creates mass alerts (67-ward blast
-  surface).
+  surface); requires a valid `X-Admin-Key`.
 - `POST /api/v1/alerts/{id}/send` — the only path that can trigger
-  real message transmission.
-- Any future administrative/ingestion-triggering endpoint.
+  real message transmission; requires a valid `X-Admin-Key` and, for
+  real delivery, `NOTIFICATION_DRY_RUN=false` plus configured
+  credentials.
 
-**Do not implement auth ad-hoc in this repo during routine feature
-work** — it is tracked as P0 in [TODO.md](TODO.md).
+**Still open before a public deployment:** per-user authentication and
+RBAC (the shared API key is not user-level auth), API-key rotation/token
+expiry, and rate limiting. Tracked in [TODO.md](TODO.md).
 
 ## Database Security
 
@@ -188,11 +208,15 @@ Recommendations (production):
 - **Recipient validation.** A single configured recipient
   (`ALERT_RECIPIENT_PHONE`) is used today; no bulk/private lists are
   stored. Real delivery without a recipient configured is refused
-  (400).
+  (400). Recipient identifiers are masked in dry-run/provider output.
+- **Admin gate before any send.** The `generate` and `send` endpoints
+  require a valid `X-Admin-Key`; dry-run remains the default and real
+  delivery additionally requires `NOTIFICATION_DRY_RUN=false`.
 - **Recommendations before enabling real delivery:**
   - Cap and rate-limit the `send` endpoint (batch limits, per-window
     quotas).
-  - Require authentication/authorization for every send/generate call.
+  - Add per-user authorization (the shared admin key is not
+    per-operator auth).
   - Validate/normalize recipient phone numbers (E.164) and maintain a
     confirmed opt-in list.
   - Add operator confirmation for anything that could become mass
@@ -244,7 +268,7 @@ Production recommendations:
   findings before deployment.
 - Keep `pvlib`, `pythermalcomfort`, `fastapi`, `sqlalchemy`,
   `asyncpg`, `uvicorn`, and `pydantic` updated deliberately, with
-  regression tests (48-test suite) run after each bump.
+  regression tests (58-test suite) run after each bump.
 
 ## Git Security Checklist
 
@@ -270,7 +294,7 @@ rewrite/trim history (only on private branches, with owner approval).
 ## Production Security Checklist
 
 - [ ] HTTPS/TLS termination and forced redirect
-- [ ] Authentication for API access
+- [ ] Per-user authentication (shared `X-Admin-Key` is not user auth)
 - [ ] Authorization (RBAC) for alert/admin endpoints
 - [ ] Rate limiting (all endpoints; stricter on send)
 - [ ] Secret manager for Twilio + DB credentials (no `.env` on servers)
@@ -280,9 +304,9 @@ rewrite/trim history (only on private branches, with owner approval).
 - [ ] Scheduled / verified database backups (PostGIS aware)
 - [ ] Monitoring + alerting on failures and send actions
 - [ ] Audit logging of alert/admin actions
-- [ ] Alert-send endpoint protection (auth + approval + quotas)
-- [ ] Security headers on responses
 - [ ] Request/body size limits
+- [x] Admin-key gate on state-changing alert endpoints (`require_admin`)
+- [x] Security headers on responses (nosniff, frame DENY, no-referrer)
 
 ## Reporting a Vulnerability
 
@@ -307,10 +331,10 @@ credentials in the process.
 Be aware — these are **honest, current gaps**, not claims of
 production readiness:
 
-- **No user authentication** or authorization exists on any endpoint,
-  including alert generation and sending.
-- **No production authorization/RBAC**, no rate limiting, no security
-  headers, and no request-size limits are configured.
+- **No per-user authentication or RBAC** — the shared `X-Admin-Key` on
+  alert endpoints is single-secret auth, not operator-level control.
+- **No rate limiting and no request-size limits** are configured.
+- **No audit logging** of admin/alert actions yet.
 - **Twilio integration is intended for dry-run/demo operation** unless
   an operator explicitly configures credentials and disables dry-run;
   bulk broadcasting is neither implemented nor safe to enable casually.

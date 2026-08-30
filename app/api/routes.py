@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
+from app.core.security import require_admin
 from app.db.session import get_db
 from app.models.alert import Alert
 from app.schemas.api import (
@@ -455,6 +456,7 @@ async def get_alerts(
     ),
 )
 async def generate_zone_alerts(
+    _admin: None = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ):
     try:
@@ -511,6 +513,7 @@ async def generate_zone_alerts(
 )
 async def send_alert(
     alert_id: int,
+    _admin: None = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ):
     alert = await session.get(Alert, alert_id)

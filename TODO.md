@@ -14,18 +14,23 @@ Legend: `[ ]` = open, `[x]` = done.
 
 Gaps confirmed by inspection of the current repository:
 
-- [ ] **Authentication on the API.** No endpoint currently requires
-      authentication. Add a pragmatic scheme (API key for the MVP, or
-      OIDC/JWT for production) across `/api/v1`.
-- [ ] **Authorization / RBAC for administrative endpoints.** Protect
-      `POST /api/v1/alerts/generate` and `POST /api/v1/alerts/{id}/send`
-      so only authorized operators can create/deliver alerts.
+- [x] **Authentication on the API.** Admin-key gate (DONE on alert
+      POST endpoints via `X-Admin-Key` / `ADMIN_API_KEY`,
+      `app/core/security.py::require_admin`). Per-user auth (OIDC/JWT)
+      and coverage beyond the two alert endpoints remain open.
+- [x] **Authorization / RBAC for administrative endpoints.** Protected
+      `POST /api/v1/alerts/generate` (401 missing / 403 invalid key).
+      `POST /api/v1/alerts/{id}/send` (same gate; real delivery also
+      requires dry-run disabled + credentials). Full RBAC per operator
+      still open.
 - [ ] **Rate limiting** on the whole API, with stricter limits on
       notification-only actions.
 - [ ] **TLS / HTTPS** termination (reverse proxy or managed LB) for any
       non-local deployment.
-- [ ] **Security headers** (HSTS, X-Content-Type-Options,
-      X-Frame-Options, CSP where appropriate).
+- [x] **Security headers.** `X-Content-Type-Options: nosniff`,
+      `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` added on
+      all responses (`SecurityHeadersMiddleware`). HSTS first needs
+      HTTPS; CSP only if a strict policy fits `/docs`.
 - [ ] **Request-size / body limits** middleware.
 - [ ] **Audit logging** of alert generation, send, and any future
       admin action (who/what/when, excluding private recipient lists).

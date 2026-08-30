@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes import router
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger, log_event
+from app.core.security import SecurityHeadersMiddleware
 from app.db.session import get_db
 
 logger = get_logger(__name__)
@@ -86,6 +87,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(router)
 

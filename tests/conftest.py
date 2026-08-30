@@ -11,3 +11,4 @@ import os
 
 os.environ.setdefault("DB_POOL_SIZE", "0")
 os.environ.setdefault("NOTIFICATION_DRY_RUN", "true")
+os.environ.setdefault("ADMIN_API_KEY", "test-admin-key")
