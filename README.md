@@ -9,6 +9,14 @@ history, a real 5-day Open-Meteo forecast, and official BMC ward GIS data.
 It publishes the resulting thermal stress indices and risk surfaces through
 a FastAPI service.
 
+## Project Documentation
+
+- [System Design](DESIGN.md) — why the backend is built this way
+- [Architecture](ARCHITECTURE.md) — how the backend is structured
+- [Security Policy](SECURITY.md) — controls, gaps, and hardening checklist
+- [Project Backlog](TODO.md) — prioritized engineering backlog
+- [AI Development Context](CHATMEMORY.md) — safe context for coding assistants
+
 ## Project Status
 
 MVP complete (Milestones M1–M11, hardening polish pass P1–P20).
@@ -119,7 +127,7 @@ Copy-Item .env.example .env   # then set DATABASE_URL
 ### 3. Data pipelines (in order)
 
 ```powershell
-.venv\Scripts\python.exe -m scripts.import_wards_geojson
+.venv\Scripts\python.exe -m scripts.import_bmc_wards
 .venv\Scripts\python.exe -m scripts.download_bhubaneswar_weather
 .venv\Scripts\python.exe -m scripts.import_bhubaneswar_weather
 .venv\Scripts\python.exe -m scripts.backfill_radiation
